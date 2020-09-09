@@ -30,6 +30,9 @@ bash <(curl -L -s https://raw.githubusercontent.com/liberal-boy/tls-shunt-proxy/
 # listen: 监听地址
 listen: 0.0.0.0:443
 
+# redirecthttps: 监听一个地址，发送到这个地址的 http 请求将被重定向到 https
+redirecthttps: 0.0.0.0:80
+
 # inboundbuffersize: 入站缓冲区大小，单位 KB, 默认值 4
 # 相同吞吐量和连接数情况下，缓冲区越大，消耗的内存越大，消耗 CPU 时间越少。在网络吞吐量较低时，缓存过大可能增加延迟。
 inboundbuffersize: 4
@@ -49,6 +52,9 @@ vhosts:
     # managedcert: 管理证书，开启后将自动从 LetsEncrypt 获取证书，根据 LetsEncrypt 的要求，必须监听 443 端口才能签发
     # 开启时 cert 和 key 设置的证书无效，关闭时将使用 cert 和 key 设置的证书
     managedcert: false
+
+    # keytype: 启用 managedcert 时，生成的密钥对类型，支持的选项 ed25519、p256、p384、rsa2048、rsa4096、rsa8192
+    keytype: p256
 
     # cert: tls 证书路径，
     cert: /etc/ssl/vmess.example.com.pem
@@ -96,6 +102,11 @@ vhosts:
       # args: 静态网站的文件路径
       args: /var/www/html
 
+    # trojan: Trojan 协议流量处理方式
+    trojan:
+      handler: proxyPass
+      args: 127.0.0.1:4430
+
     # default: 其他流量处理方式
     default:
 
@@ -104,6 +115,9 @@ vhosts:
 
       # args: 转发的目标地址
       args: 127.0.0.1:40001
+
+      # args: 支持通过 Proxy Protocol 将源地址向后端传抵，目前仅支持 v1
+      # args: 127.0.0.1:40001;proxyProtocol
 
       # args: 也可以使用 domain socket
       # args: unix:/path/to/ds/file
@@ -122,6 +136,6 @@ vhosts:
 
 ## 故障排查和常见问题
 
-1. service 启动失败，请使用命令 `sudo -u tls-shunt-proxy /usr/local/bin/tls-shunt-proxy -config /etc/tls-shunt-proxy/config.yaml` 运行，获取错误信息
+1. service 启动失败，请使用命令 `sudo setcap "cap_net_bind_service=+ep" /usr/local/bin/tls-shunt-proxy` 给 tls-shunt-proxy 赋予 CAP_NET_BIND_SERVICE 的 capability ，然后 `sudo -u tls-shunt-proxy /usr/local/bin/tls-shunt-proxy -config /etc/tls-shunt-proxy/config.yaml` 运行，获取错误信息
 
 2. `fail to load tls key pair for xxx.xxx: open /xxx/xxx.key: permission denied` 确保用户 `tls-shunt-proxy` 有权读取证书

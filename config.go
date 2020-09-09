@@ -12,6 +12,7 @@ import (
 type (
 	rawConfig struct {
 		Listen                                string
+		RedirectHttps                         string
 		InboundBufferSize, OutboundBufferSize int
 		VHosts                                []rawVHost
 	}
@@ -21,9 +22,11 @@ type (
 		ManagedCert   bool
 		Cert          string
 		Key           string
+		KeyType       string
 		Alpn          string
 		Protocols     string
 		Http          rawHttpHandler
+		Trojan        rawHandler
 		Default       rawHandler
 	}
 	rawHandler struct {
@@ -45,13 +48,15 @@ type (
 
 type (
 	config struct {
-		Listen string
-		vHosts map[string]vHost
+		Listen        string
+		RedirectHttps string
+		vHosts        map[string]vHost
 	}
 	vHost struct {
 		TlsConfig    *tls.Config
 		Http         handler.Handler
 		PathHandlers []pathHandler
+		Trojan       handler.Handler
 		Default      handler.Handler
 	}
 	pathHandler struct {
@@ -82,13 +87,14 @@ func readConfig(path string) (conf config, err error) {
 	handler.InitBufferPools(rawConf.InboundBufferSize*1024, rawConf.OutboundBufferSize*1024)
 
 	conf.Listen = rawConf.Listen
+	conf.RedirectHttps = rawConf.RedirectHttps
 	conf.vHosts = make(map[string]vHost, len(rawConf.VHosts))
 
 	for _, vh := range rawConf.VHosts {
 		var tlsConfig *tls.Config
 
 		if vh.TlsOffloading {
-			tlsConfig, err = getTlsConfig(vh.ManagedCert, vh.Name, vh.Cert, vh.Key, vh.Alpn, vh.Protocols)
+			tlsConfig, err = getTlsConfig(vh.ManagedCert, vh.Name, vh.Cert, vh.Key, vh.KeyType, vh.Alpn, vh.Protocols)
 		}
 
 		pathHandlers := make([]pathHandler, len(vh.Http.Paths))
@@ -105,6 +111,7 @@ func readConfig(path string) (conf config, err error) {
 			TlsConfig:    tlsConfig,
 			Http:         newHandler(vh.Http.Handler, vh.Http.Args),
 			PathHandlers: pathHandlers,
+			Trojan:       newHandler(vh.Trojan.Handler, vh.Trojan.Args),
 			Default:      newHandler(vh.Default.Handler, vh.Default.Args),
 		}
 	}

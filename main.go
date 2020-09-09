@@ -12,7 +12,7 @@ import (
 	"strings"
 )
 
-const version = "0.5.1"
+const version = "0.6.1"
 
 var conf config
 
@@ -26,6 +26,10 @@ func main() {
 	conf, err = readConfig(*config)
 	if err != nil {
 		log.Fatalf("failed to read config %s: %v", *config, err)
+	}
+
+	if conf.RedirectHttps != "" {
+		handler.ServeRedirectHttps(conf.RedirectHttps)
 	}
 
 	listenAndServe()
@@ -71,8 +75,13 @@ func handleWithServerName(conn net.Conn, serverName string) {
 		sniffConn := sniffer.NewPeekPreDataConn(conn)
 		conn = sniffConn
 
-		if isHttp := sniffConn.Sniff(); isHttp {
+		switch sniffConn.Type {
+		case sniffer.TypeHttp:
 			if handleHttp(sniffConn, vh) {
+				return
+			}
+		case sniffer.TypeTrojan:
+			if handleTrojan(sniffConn, vh) {
 				return
 			}
 		}
@@ -80,7 +89,7 @@ func handleWithServerName(conn net.Conn, serverName string) {
 	vh.Default.Handle(conn)
 }
 
-func handleHttp(conn *sniffer.HttpSniffConn, vh vHost) bool {
+func handleHttp(conn *sniffer.SniffConn, vh vHost) bool {
 	for _, p := range vh.PathHandlers {
 		if strings.HasPrefix(conn.GetPath(), p.path) {
 			conn.SetPath(strings.TrimPrefix(conn.GetPath(), p.trimPrefix))
@@ -94,6 +103,14 @@ func handleHttp(conn *sniffer.HttpSniffConn, vh vHost) bool {
 		return true
 	}
 
+	return false
+}
+
+func handleTrojan(conn *sniffer.SniffConn, vh vHost) bool {
+	if vh.Trojan != handler.NoopHandler {
+		vh.Trojan.Handle(conn)
+		return true
+	}
 	return false
 }
 
